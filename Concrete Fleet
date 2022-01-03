@@ -1,0 +1,591 @@
+#Importamos todas las librerias a utilizar
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+import os
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gs
+import seaborn as sns
+import plotly
+import plotly.express as px
+from matplotlib import style
+from sklearn.impute import KNNImputer
+from sklearn.linear_model import LinearRegression
+pd.set_option('display.max_rows', 500)
+pd.set_option('display.max_columns', None)
+pd.set_option('display.width', 150)
+from sklearn.metrics import classification_report, confusion_matrix
+from sklearn import preprocessing
+
+#para los modelos de regresion
+from sklearn.model_selection import train_test_split
+from sklearn import tree
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsRegressor
+
+#para los modelos de redes neuronales
+from tensorflow.keras import Model, Input
+from tensorflow.keras import layers
+from tensorflow.keras.metrics import AUC
+from tensorflow.keras.utils import to_categorical
+from xgboost import XGBRegressor
+
+#math
+from statistics import mean
+from math import sqrt
+from sklearn.metrics import plot_confusion_matrix, accuracy_score
+from sklearn.metrics import precision_score, recall_score, f1_score
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import mean_squared_error
+
+
+### Funcion para calcular la distancia entre dos puntos a través de la función haversine,
+# esto nos permite convertir coordenadas en unidades de distancia
+from math import radians, cos, sin, asin, sqrt
+def DistanciaGPS (lon1, lat1, lon2, lat2):
+    """
+    Calculate the great circle distance between two points 
+    on the earth (specified in decimal degrees)
+    """
+    # Convertimos grados decimales en radianes
+           
+    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+    # Se utiliza la formula Haversine
+    dlon = lon2 - lon1 
+    dlat = lat2 - lat1 
+    a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
+    c = 2 * np.arcsin(sqrt(a)) 
+    # Radius of earth in kilometers is 6371
+    km = 6371* c
+    return km
+
+###Funcion Dummy
+# Definimos la función que nos ayudara a crear los dummies para alimentar el modelo
+
+def dummy_convert (df,ID_ESTRUC):
+
+    estruturas = pd.get_dummies(df[ID_ESTRUC], prefix = ID_ESTRUC)
+    df = pd.concat([df, estruturas], axis = 1, )
+
+    return df
+
+
+### importamos el data set con los datos de la empresa concretera
+df=pd.ExcelFile('Dataset7.xlsx')
+df1 = pd.read_excel(df, na_values='?')
+df1.head()
+df1.describe()
+
+df1['T.Descarga'].describe()
+count    45683.000000
+mean        50.401397
+std         36.015488
+min          6.000000
+25%         24.000000
+50%         40.000000
+75%         66.000000
+max        338.000000
+
+###revisamos cantidad de nulos en el data set
+df1.isnull().sum()
+TKNUM                                 0
+WERKS                                 0
+FECHA_DESP                            0
+KUNNR                                 0
+IDEOBRA                               0
+MATNR                                 0
+FORMULA                               0
+ID_ESTRUC                             0
+ID_MODALIDAD                          0
+ID_MODALIDAD_2                        0
+VBELN_PED                             0
+VBELN_ENTREGA                         0
+Fec. Prod                             0
+Doc. Transporte                       0
+Estado                                0
+Placa                                 0
+Cliente                               0
+Descripción de Obra                   0
+Pto. Exped                            0
+V. Entregado                         20
+H. Program                           20
+Tiempo de Proceso 1                8518
+Tiempo de Proceso 2                   0
+Tiempo Proceso Minutos              138
+Traslado a Obra 1                     0
+Traslado a Obra 2                     0
+Tiempo Translado Minutos              0
+Espera en Obra 1                      0
+Espera en Obra 2                      0
+Tiempo Espera Minutos                 5
+Descarga en Obra 1                    0
+Descarga en Obra 2                    0
+Tiempo Descarga Minutos               0
+Retorno as Planta 1                   0
+Retorno as Planta 2                   0
+Tiempo Retorno Planta Minutos         0
+Dif. Total                            0
+Reconstruido                      44968
+WERK LAT                              0
+WERK LON                              0
+  Código de Obra                      0
+OBRA LON                              0
+OBRA LAT                              0
+DESCRIPCION                          61
+Fecha_DiaSem                          0
+FinSemana                             0
+FinMes                                0
+T.Proceso                          9302
+T.Traslado                          100
+T.Espera                           1587
+T.Descarga                            0
+T.Retorno                            54
+T.Ciclo WT                        45683
+T.Ciclo Calc (T5-PROD)                0
+Asentamiento                          0
+Asentamiento_Agr                      0
+Tipo Obra                             0
+Tipo Estructura                       0
+Tipo Estructura Negocio               0
+FRANJA_HORARIA                        0
+PRED_T.DESC_PLANTA                    0
+
+
+### procedemos a crear un diccionario con los nuevos valores de columnas para standarizar los nombres
+df1.rename(columns={'TKNUM  ' : 'TKNUM',
+                    'WERKS' : 'WERKS',
+                    'FECHA_DESP' : 'FECHA_DESP',
+                    'KUNNR     ' : 'KUNNR',
+                    'IDEOBRA   ' : 'IDEOBRA',
+                    'MATNR    ' : 'MATNR',
+                    'FORMULA                       ' : 'FORMULA',
+                    'ID_ESTRUC' : 'ID_ESTRUC',
+                    'ID_MODALIDAD' : 'ID_MODALIDAD',
+                    'ID_MODALIDAD_2' : 'ID_MODALIDAD_2',
+                    'VBELN_PED' : 'VBELN_PED',
+                    'VBELN_ENTREGA' : 'VBELN_ENTREGA',
+                    'Fec. Prod': 'FEC_PROD',
+                    'Doc. Transporte' : 'DOC_TRANS',
+                    '  Código de Obra' : 'OBRA_COD',
+                    'DES_ESTRUCTURA' : 'DES_ESTRUCTURA',
+                    'Estado': 'ESTADO',
+                    'Placa': 'PLACA',
+                    'Cliente': 'CLIENTE',
+                    'Descripción de Obra': 'DESC_OBRA',
+                    'Pto. Exped': 'PTO_EXPED',
+                    'V. Entregado' : 'V_ENTREGADO',
+                    'H. Program' : 'H_PROGRAM',
+                    'Tiempo de Proceso 1' : 'TPROCESO1',
+                    'Tiempo de Proceso 2' : 'TPROCESO2',
+                    'Tiempo Proceso' : 'TPROCESO',
+                    'Traslado a Obra 1' : 'TRASLADO1',
+                    'Traslado a Obra 2' : 'TRASLADO 2',
+                    'Tiempo Translado Minutos' : 'TRASLADO',                     
+                    'Espera en Obra 1': 'ESPERA1',
+                    'Espera en Obra 2': 'ESPERA2',
+                    'Tiempo Espera Minutos': 'TESPERA',
+                    'Descarga en Obra 1' : 'DESCARGA1',
+                    'Descarga en Obra 2' : 'DESCARGA2',
+                    'Tiempo Descarga Minutos': 'TDESCARGA',
+                    'Retorno as Planta 1': 'RETORNO1',
+                    'Retorno as Planta 2': 'RETORNO2',
+                    'Tiempo Retorno Planta Minutos': 'TRETORNO',
+                    'Dif. Total': 'DIFTOTAL',
+                    'T.Proceso' : 'TPROCESOTOTAL',
+                    'T.Traslado' : 'TTRASLADOTOTAL',
+                    'T.Espera' : 'TESPERATOTAL',
+                    'T.Descarga': 'TDESCARGATOTAL',
+                    'T.Retorno' : 'TRETORNOTOTAL',
+                    'Dia' : 'DIA',
+                    'Fecha_DiaSem' : 'DIASEMANA',
+                    'FinSemana' : 'FINSEMANA', 
+                    'T.Ciclo Calc (T5-PROD)': 'T5PROD', 
+                    'Asentamiento' : 'ASENT', 
+                    'Asentamiento_Agr' : 'ASENTAGR',  
+                    'Tipo Obra': 'OBRATIPO',
+                    'Eliminar' : 'ELIMINAR',
+                    'FinMes': 'FINMES',
+                    'WERK LON' : 'WERK_LON',
+                    'WERK LAT' : 'WERK_LAT' ,
+                    'OBRA LAT': 'OBRA_LAT',
+                    'OBRA LON' : 'OBRA_LON',
+                    'Tipo Estructura' : 'TIPO_ESTRUC',
+                    'Tipo Estructura Negocio' : 'TIPO_ESTRUC_NEG',
+                    'FRANJA_HORARIA' : 'FRANJA_HORARIA',
+                    'PRED_T.DESC_PLANTA' : 'PRED_T.DESC_PLANTA' 
+                   },
+            inplace=True)
+
+# Creamos la columna distancia basandonos en la funcion definida para su calculo y se llenan las filas con los valores obtenidos
+df1["DISTANCIA"]=df1.apply(lambda x: DistanciaGPS(x['WERK_LON'],x["WERK_LAT"],x["OBRA_LON"],x["OBRA_LAT"]),axis = 1)
+# Redondeamos para tener valores enteros
+df1["DISTANCIA"] = df1["DISTANCIA"].apply(np.round)
+df1["DISTANCIA"]
+
+### antes de eliminar nulos bajo alguna opcion estadistica, ingresamos las reglas de negocio que nos ayudarán a limpiar los datos y a reducir los nulos considerablemente.
+#Eliminamos 20 valores nulos de la columna V_Entregado ya que no tienen relevancia estadística y son pedidos no procesados
+df1.dropna(subset = ["V_ENTREGADO"], inplace=True)
+index = df1[(df1['TDESCARGATOTAL'] >= 300)|(df1['TDESCARGATOTAL'] <= 6)].index
+df1.drop(index, inplace=True)
+index = df1[(df1['V_ENTREGADO'] > 8)|(df1['V_ENTREGADO'] <= 0.5)].index
+df1.drop(index, inplace=True)
+index = df1[(df1['DISTANCIA'] >= 200)|(df1['DISTANCIA'] <= 1)].index
+df1.drop(index, inplace=True)
+index = df1[(df1['T5PROD'] >= 400)|(df1['T5PROD'] <= 20)].index
+df1.drop(index, inplace=True)
+index = df1[df1['WERKS'] == 1253].index
+df1.drop(index, inplace=True)
+
+df1.reset_index(drop=True, inplace=True)
+df1
+
+df1['TDESCARGATOTAL'].describe()
+count    36298.000000
+mean        46.803488
+std         33.016458
+min          7.000000
+25%         23.000000
+50%         37.000000
+75%         60.000000
+max        297.000000
+
+labels = 'Data Limpia', 'Data Errores'
+okey = len(df1)/45683
+malas = (45683 - len(df1))/45683
+sizes = [okey, malas]
+explode = (0, 0.1)  # only "explode" the 2nd slice (i.e. 'Hogs')
+
+fig1, ax1 = plt.subplots()
+ax1.pie(sizes, explode=explode, labels=labels, autopct='%1.1f%%',
+        shadow=True, startangle=90)
+ax1.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
+plt.title('% Data Quality')
+plt.show()
+
+sns.distplot(df1['TDESCARGATOTAL'])
+
+sns.boxplot(x=df1['TDESCARGATOTAL'])
+
+sns.distplot(df1['PRED_T.DESC_PLANTA'])
+
+sns.boxplot(x=df1['PRED_T.DESC_PLANTA'])
+
+df1["Error_Planta"] = df1["TDESCARGATOTAL"] - df1["PRED_T.DESC_PLANTA"]
+sns.distplot(df1['Error_Planta'])
+
+sns.boxplot(x=df1['Error_Planta'])
+
+df1['Error_Planta'].describe()
+
+sqrt(mean_squared_error(df1["TDESCARGATOTAL"],df1["PRED_T.DESC_PLANTA"]))
+
+df2 =df1.copy()
+
+### Creamos variables dummy para cada una de las variables descriptivas que inferimos podrian incidir en el tiempo de descarga
+df2=dummy_convert(df2,"TIPO_ESTRUC") #aplica la funcion para ID_Estruc
+df2=dummy_convert(df2,"WERKS") #aplica la fucntion para Werks
+df2=dummy_convert(df2, "ID_MODALIDAD_2") #aplica la funcion para Modalidad
+df2=dummy_convert(df2, "ASENT") #aplica la funcion para Asentamiento
+df2=dummy_convert(df2, "ASENTAGR") #aplica la funcion para Asentamiento agregado
+df2=dummy_convert(df2, 'OBRATIPO') #aplica la funcion para clasificación de tipo de obra
+df2=dummy_convert(df2, 'DIASEMANA') #aplica la funcion para diferenciar los dias de la semana
+df2=dummy_convert(df2,"TIPO_ESTRUC_NEG") #aplica la funcion para ID_Estruc_NEG
+df2=dummy_convert(df2,"FRANJA_HORARIA") #aplica la funcion para franja horaria, mañana tarde noche madrugada
+df2=dummy_convert(df2,"ID_ESTRUC") #aplica la funcion para franja horaria, mañana tarde noche madrugada
+
+#  Creamos un nuevo dataset para verificar la existencia de nulos y tratarlos de manera conveniente
+#  segun el dfclean.corr() estamos anulando aquellas variables independientes que tienen menor correlacion con la varaible dependiente, y que tienen correlacion mas de 0.6 entre sí.
+dfclean = df2[[ 'TDESCARGATOTAL','PRED_T.DESC_PLANTA',
+               'V_ENTREGADO',
+               'DIASEMANA_1', 'DIASEMANA_2', 'DIASEMANA_3', 'DIASEMANA_4', 'DIASEMANA_5', #'DIASEMANA_6', 'DIASEMANA_7', 
+               'FINSEMANA', 'FINMES', 
+               'DISTANCIA',
+               'TIPO_ESTRUC_3', 'TIPO_ESTRUC_4', 'TIPO_ESTRUC_5', 'TIPO_ESTRUC_6', 'TIPO_ESTRUC_7', 'TIPO_ESTRUC_8', 'TIPO_ESTRUC_9', 'TIPO_ESTRUC_10', 'TIPO_ESTRUC_11',
+               'WERKS_1203', 'WERKS_1207', 'WERKS_1209', 'WERKS_1211', 'WERKS_1213', 'WERKS_1217', 'WERKS_1219', 'WERKS_5202', 'WERKS_5212', 
+               'ASENT_A3', 'ASENT_A4', 'ASENT_A5', 'ASENT_A6', 'ASENT_A7', 'ASENT_A8', 'ASENT_A9', 
+               #'ASENTAGR_A3', 'ASENTAGR_A4', 'ASENTAGR_A5-A6', 'ASENTAGR_A7-A8', 'ASENTAGR_A9', 
+               'OBRATIPO_Grande', 'OBRATIPO_Mediana', 'OBRATIPO_Pequeña',
+               'ID_MODALIDAD_2_1', #'ID_MODALIDAD_2_2'
+               #'TIPO_ESTRUC_NEG_1', 'TIPO_ESTRUC_NEG_2', 'TIPO_ESTRUC_NEG_4', 'TIPO_ESTRUC_NEG_5', 'TIPO_ESTRUC_NEG_7', 'TIPO_ESTRUC_NEG_11', 'TIPO_ESTRUC_NEG_12', #'TIPO_ESTRUC_NEG_3', 
+               'FRANJA_HORARIA_0', 'FRANJA_HORARIA_1', 'FRANJA_HORARIA_2', 'FRANJA_HORARIA_3', 'FRANJA_HORARIA_4'
+               #'ID_ESTRUC_1', 'ID_ESTRUC_2', 'ID_ESTRUC_3', 'ID_ESTRUC_4', 'ID_ESTRUC_5', 'ID_ESTRUC_6', 'ID_ESTRUC_7', 'ID_ESTRUC_8', 'ID_ESTRUC_9', 'ID_ESTRUC_10', 'ID_ESTRUC_11', 'ID_ESTRUC_12', 'ID_ESTRUC_13', 'ID_ESTRUC_14', 'ID_ESTRUC_15', 'ID_ESTRUC_16', 'ID_ESTRUC_17', 'ID_ESTRUC_18', 'ID_ESTRUC_19', 'ID_ESTRUC_20', 'ID_ESTRUC_21', 'ID_ESTRUC_22', 'ID_ESTRUC_23', 'ID_ESTRUC_24', 'ID_ESTRUC_25', 'ID_ESTRUC_26', 'ID_ESTRUC_27', 'ID_ESTRUC_28', 'ID_ESTRUC_29', 'ID_ESTRUC_30', 'ID_ESTRUC_31', 'ID_ESTRUC_32', 'ID_ESTRUC_33', 'ID_ESTRUC_34', 'ID_ESTRUC_35', 'ID_ESTRUC_36', 'ID_ESTRUC_37', 'ID_ESTRUC_38', 'ID_ESTRUC_39', 'ID_ESTRUC_40', 'ID_ESTRUC_42', 'ID_ESTRUC_43', 'ID_ESTRUC_44', 'ID_ESTRUC_45', 'ID_ESTRUC_46', 'ID_ESTRUC_47', 'ID_ESTRUC_48', 'ID_ESTRUC_49', 'ID_ESTRUC_50'
+                ]] 
+dfclean.head(100)
+
+dfclean.corr()
+
+### necesitamos validar que ninguna variable independiente tiene una correlación entre otra variable independiente para ingresarlo al modelo
+dfclean_indepent = dfclean[dfclean.columns[2:]] 
+fig_dims = (20,20)
+fig, ax = plt.subplots(figsize = fig_dims)
+heatmap1 = sns.heatmap(dfclean_indepent.corr(), vmin=0, vmax=0.6, annot=False, center = 0, cmap="coolwarm")
+heatmap1.set_title('Correlacion Variables ', fontdict={'fontsize':24}, pad=24)
+
+
+
+Primero vamos a correr un random forest regressor con el 100% de la data para obtener las mejores Features posibles y luego con ellas vamos a lanzar N modelos para identificar cual sale mejor.
+T = dfclean[dfclean.columns.to_list()[2:]]
+r = dfclean['TDESCARGATOTAL']
+
+rf = RandomForestRegressor()
+rf.fit(T,r)
+
+rf2 = RandomForestRegressor(n_estimators = 400) # max_depth, random_state=42,
+rf2.fit(T,r)
+
+print(rf.score(T,r), rf2.score(T,r))
+
+importancia = pd.concat([pd.DataFrame(rf.feature_importances_).rename(columns = {0:'Valor'}),pd.DataFrame(T.columns).rename(columns = {0:'Atributo'})],axis=1)
+importancia = importancia.sort_values('Valor', ascending=False).reset_index(drop=True)
+importancia['Acum'] = importancia['Valor'].cumsum()
+importancia
+
+Valor	Atributo	Acum
+0	0.142347	DISTANCIA	0.142347
+1	0.136222	ID_MODALIDAD_2_1	0.278569
+2	0.114150	V_ENTREGADO	0.392719
+3	0.038017	TIPO_ESTRUC_8	0.430736
+4	0.029373	TIPO_ESTRUC_4	0.460109
+5	0.028209	TIPO_ESTRUC_10	0.488319
+6	0.026215	DIASEMANA_4	0.514533
+7	0.025106	FRANJA_HORARIA_2	0.539639
+8	0.024770	FRANJA_HORARIA_3	0.564409
+9	0.024676	FINSEMANA	0.589085
+10	0.024428	ASENT_A5	0.613514
+11	0.024107	DIASEMANA_3	0.637621
+12	0.023582	DIASEMANA_1	0.661203
+13	0.022975	DIASEMANA_2	0.684177
+14	0.022921	DIASEMANA_5	0.707098
+15	0.022527	TIPO_ESTRUC_9	0.729626
+16	0.021565	WERKS_1203	0.751191
+17	0.019120	FRANJA_HORARIA_1	0.770311
+18	0.018647	ASENT_A7	0.788958
+19	0.018121	FINMES	0.807079
+20	0.017954	WERKS_1219	0.825033
+21	0.017029	TIPO_ESTRUC_3	0.842062
+22	0.016108	WERKS_1209	0.858170
+23	0.015714	OBRATIPO_Mediana	0.873884
+24	0.015418	FRANJA_HORARIA_4	0.889302
+25	0.013721	TIPO_ESTRUC_5	0.903023
+26	0.013184	TIPO_ESTRUC_6	0.916207
+27	0.013156	OBRATIPO_Pequeña	0.929362
+28	0.009087	WERKS_1217	0.938449
+29	0.009011	WERKS_1213	0.947461
+30	0.008959	ASENT_A4	0.956419
+31	0.005870	FRANJA_HORARIA_0	0.962290
+32	0.005763	ASENT_A8	0.968052
+33	0.005463	WERKS_1207	0.973515
+34	0.005402	TIPO_ESTRUC_7	0.978917
+35	0.005129	OBRATIPO_Grande	0.984046
+36	0.004875	ASENT_A9	0.988921
+37	0.004524	WERKS_5202	0.993445
+38	0.002633	ASENT_A6	0.996078
+39	0.001970	WERKS_1211	0.998048
+40	0.001238	TIPO_ESTRUC_11	0.999286
+41	0.000562	ASENT_A3	0.999848
+42	0.000152	WERKS_5212	1.000000
+
+
+importancia2 = pd.concat([pd.DataFrame(rf2.feature_importances_).rename(columns = {0:'Valor'}),pd.DataFrame(T.columns).rename(columns = {0:'Atributo'})],axis=1)
+importancia2 = importancia2.sort_values('Valor', ascending=False).reset_index(drop=True)
+importancia2['Acum'] = importancia2['Valor'].cumsum()
+importancia2
+
+Valor	Atributo	Acum
+0	0.141121	DISTANCIA	0.141121
+1	0.136993	ID_MODALIDAD_2_1	0.278115
+2	0.115702	V_ENTREGADO	0.393816
+3	0.038178	TIPO_ESTRUC_8	0.431994
+4	0.028879	TIPO_ESTRUC_4	0.460873
+5	0.028468	TIPO_ESTRUC_10	0.489342
+6	0.025721	DIASEMANA_4	0.515063
+7	0.024842	FRANJA_HORARIA_3	0.539905
+8	0.024832	FRANJA_HORARIA_2	0.564737
+9	0.024466	ASENT_A5	0.589203
+10	0.024251	FINSEMANA	0.613454
+11	0.023836	DIASEMANA_3	0.637290
+12	0.023516	DIASEMANA_1	0.660806
+13	0.023087	DIASEMANA_2	0.683893
+14	0.022979	DIASEMANA_5	0.706872
+15	0.022508	TIPO_ESTRUC_9	0.729381
+16	0.021878	WERKS_1203	0.751259
+17	0.019206	FRANJA_HORARIA_1	0.770465
+18	0.018586	ASENT_A7	0.789051
+19	0.018320	FINMES	0.807371
+20	0.017380	WERKS_1219	0.824750
+21	0.016690	TIPO_ESTRUC_3	0.841441
+22	0.016198	WERKS_1209	0.857639
+23	0.016132	OBRATIPO_Mediana	0.873771
+24	0.014867	FRANJA_HORARIA_4	0.888638
+25	0.013798	TIPO_ESTRUC_5	0.902437
+26	0.013153	TIPO_ESTRUC_6	0.915590
+27	0.013145	OBRATIPO_Pequeña	0.928735
+28	0.009195	ASENT_A4	0.937930
+29	0.009183	WERKS_1217	0.947113
+30	0.008931	WERKS_1213	0.956044
+31	0.005945	FRANJA_HORARIA_0	0.961989
+32	0.005809	ASENT_A8	0.967798
+33	0.005499	TIPO_ESTRUC_7	0.973297
+34	0.005386	WERKS_1207	0.978682
+35	0.005164	OBRATIPO_Grande	0.983847
+36	0.005071	ASENT_A9	0.988918
+37	0.004405	WERKS_5202	0.993322
+38	0.002749	ASENT_A6	0.996072
+39	0.001946	WERKS_1211	0.998017
+40	0.001256	TIPO_ESTRUC_11	0.999273
+41	0.000568	ASENT_A3	0.999841
+42	0.000159	WERKS_5212	1.000000
+
+My_List = importancia2.Atributo.unique().tolist()
+My_List
+
+['DISTANCIA',
+ 'ID_MODALIDAD_2_1',
+ 'V_ENTREGADO',
+ 'TIPO_ESTRUC_8',
+ 'TIPO_ESTRUC_4',
+ 'TIPO_ESTRUC_10',
+ 'DIASEMANA_4',
+ 'FRANJA_HORARIA_3',
+ 'FRANJA_HORARIA_2',
+ 'ASENT_A5',
+ 'FINSEMANA',
+ 'DIASEMANA_3',
+ 'DIASEMANA_1',
+ 'DIASEMANA_2',
+ 'DIASEMANA_5',
+ 'TIPO_ESTRUC_9',
+ 'WERKS_1203',
+ 'FRANJA_HORARIA_1',
+ 'ASENT_A7',
+ 'FINMES',
+ 'WERKS_1219',
+ 'TIPO_ESTRUC_3',
+ 'WERKS_1209',
+ 'OBRATIPO_Mediana',
+ 'FRANJA_HORARIA_4',
+ 'TIPO_ESTRUC_5',
+ 'TIPO_ESTRUC_6',
+ 'OBRATIPO_Pequeña',
+ 'ASENT_A4',
+ 'WERKS_1217',
+ 'WERKS_1213',
+ 'FRANJA_HORARIA_0',
+ 'ASENT_A8',
+ 'TIPO_ESTRUC_7',
+ 'WERKS_1207',
+ 'OBRATIPO_Grande',
+ 'ASENT_A9',
+ 'WERKS_5202',
+ 'ASENT_A6',
+ 'WERKS_1211',
+ 'TIPO_ESTRUC_11',
+ 'ASENT_A3',
+ 'WERKS_5212']
+ 
+ Procedemos a preparar la data para imputarla en los modelos:
+ #X = dfclean[dfclean.columns.to_list()[1:]]
+X = dfclean[My_List[:30]] #
+y = dfclean['TDESCARGATOTAL']
+w = dfclean['PRED_T.DESC_PLANTA']
+ts=0.2
+
+X_train, X_test, y_train, y_test, w_train, w_test = train_test_split(X, y, w, test_size=ts)
+print(len(X_train),len(X_test),len(y_train),len(y_test),len(w_train),len(w_test))
+
+#Arbol de decision
+def modelo_DecisionTree( X_train, y_train, X_test, y_test, w_test, p_max_depth):
+    clf = tree.DecisionTreeRegressor(max_depth=p_max_depth)
+    clf = clf.fit(X_train, y_train)
+    predicciones = clf.predict(X_test)
+    result = sqrt(mean((y_test - predicciones)**2))
+    result2 = sqrt(mean((y_test - w_test)**2))
+    modelo_fit = clf
+    print("Modelo = DecisionTree Resultado =", result," RMSE Planta = ", result2)
+
+
+#Randomforest
+def modelo_RandomForest( X_trainrf, y_trainrf, X_testrf, y_testrf, w_testrf, p_n_estimators, p_max_depth, p_random_state ):
+    results_rf = []
+    rf = RandomForestRegressor(n_estimators=p_n_estimators, max_depth = p_max_depth, random_state=p_random_state, min_samples_split= 9)
+    rf.fit(X_trainrf, y_trainrf)
+    predictions = rf.predict(X_testrf)
+    result = sqrt(mean((y_testrf - predictions)**2))
+    result2 = sqrt(mean((y_testrf - w_testrf)**2))
+    #results_rf.append(result)
+
+    return print("Modelo = RandomForestRegressor Resultado = ", result," RMSE Planta = ", result2), predictions, w_testrf
+    
+
+#KNNRegressor    
+def modelo_KNeighborsRegressor (X_train,y_train, X_test, y_test, w_test, p_n_neighbors):
+    results_knn = []
+    knn_model = KNeighborsRegressor(n_neighbors=p_n_neighbors, weights = 'uniform')
+    knn_model = knn_model.fit(X_train, y_train)
+    predictions = knn_model.predict(X_test)
+    result = sqrt(mean((y_test - predictions)**2))
+    result2 = sqrt(mean((y_test - w_test)**2))
+  
+    print("Modelo = KNeighborsRegressor Resultado = ",result," RMSE Planta = ", result2)
+    
+#XGBoost
+def modelo_XGBRegressor(X_train,y_train, X_test, y_test, w_test):
+    
+    
+    
+    xgb = XGBRegressor(subsample=1,colsample_bytree = 1,max_depth = 9, min_child_weight=1)
+    xgb.fit(X_train,y_train,eval_metric="rmse")
+    predictions = xgb.predict(X_test)
+    result = sqrt(mean((y_test - predictions)**2))
+    result2 = sqrt(mean((y_test - w_test)**2))
+    result3 = mean(abs(y_test - w_test))
+    
+    print("Modelo = XGBRegressor Resultado = ",result," RMSE Planta = ", result2, " MAE = ", result3)
+    
+#Arbol de decision
+modelo_DecisionTree(X_train, y_train, X_test, y_test, w_test,5)
+
+#Randomforest
+rpta, predictions, w_test_rf = modelo_RandomForest(X_train, y_train, X_test, y_test, w_test, 288, None, p_random_state= None )
+rpta
+
+#KNN
+modelo_KNeighborsRegressor(X_train,y_train, X_test, y_test, w_test,15)
+
+#XGBR
+modelo_XGBRegressor(X_train,y_train, X_test, y_test, w_test)
+
+resultados = pd.concat([pd.Series(predictions), y_test.reset_index(drop=True), w_test_rf.reset_index(drop=True)], axis=1)
+resultados.rename(columns = {0 : 'PRED'}, inplace=True )
+
+resultados['real-preddiccionRF'] = resultados['TDESCARGATOTAL'] - resultados['PRED']
+resultados['real-planta'] = resultados['TDESCARGATOTAL'] - resultados['PRED_T.DESC_PLANTA']
+resultados['real-preddiccionRF_abs'] = resultados['real-preddiccionRF'].apply(abs)
+resultados['real-planta_abs'] = resultados['real-planta'].apply(abs)
+resultados
+
+sns.distplot(resultados['real-preddiccionRF'])
+
+sns.distplot(resultados['real-preddiccionRF'])
+
+resultados['real-preddiccionRF'].describe()
+
+sns.distplot(resultados['real-planta'])
+
+resultados['real-planta'].describe()
+
+X_train.shape[1]
+cols_n = X_train.shape[1]
+inputs = Input(shape=(cols_n))
+x = layers.Dense(42, activation="relu")(inputs)
+x = layers.Dense(32, activation="sigmoid")(inputs)
+x = layers.Dense(16, activation="sigmoid")(inputs)
+predictions = layers.Dense(1, activation="sigmoid")(x)
+model = Model(inputs, predictions)
+model.compile(loss='MeanSquaredError', optimizer="adam", metrics=['RootMeanSquaredError'])
+model.summary()
+model.fit(X_train, y_train, epochs=32, validation_data=(X_test, y_test))
+
+
